@@ -16,6 +16,8 @@ Review the code and commands in each example to see how Automation with psPAS ca
   - This will show what the code would do, without actually doing it.
   - If the `-WhatIf` switch is removed from the command, the change will happen.
 
+![psPAS](https://github.com/pspete/psPAS/blob/master/docs/assets/images/shop_banner_symbol.png?raw=true)
+
 ## `Unlock-CYBRUser`
 
 ```powershell
@@ -35,6 +37,8 @@ The username of the vault user to unlock.
 .EXAMPLE
 Unlock-CYBRUser -username SomeUserName
 ```
+
+![psPAS](https://github.com/pspete/psPAS/blob/master/docs/assets/images/shop_banner_symbol.png?raw=true)
 
 ## `Get-CYBRSafeMember`
 
@@ -60,6 +64,8 @@ Get-CYBRSafeMember -SafePattern Region1_TeamA_
 
 Will report on all AD groups which are members of safes matching name pattern "Region1_TeamA_"
 ```
+
+![psPAS](https://github.com/pspete/psPAS/blob/master/docs/assets/images/shop_banner_symbol.png?raw=true)
 
 ## `New-CYBRSafe`
 
@@ -89,6 +95,8 @@ New-CYBRSafe -SafeName "EU_NewSafeExample"
 
 Creates the EU_NewSafeExample safe and sets permissions via `Set-CYBRSafePermission`
 ```
+
+![psPAS](https://github.com/pspete/psPAS/blob/master/docs/assets/images/shop_banner_symbol.png?raw=true)
 
 ## `Set-CYBRSafePermission`
 
@@ -134,6 +142,8 @@ On safe TargetSafeName, adds or updates members
 "APACSupport"
 ```
 
+![psPAS](https://github.com/pspete/psPAS/blob/master/docs/assets/images/shop_banner_symbol.png?raw=true)
+
 ## `Get-CYBRPlatformConfig`
 
 ```powershell
@@ -154,6 +164,8 @@ Get-CYBRPlatformConfig
 
 Returns details of all active regular platforms
 ```
+
+![psPAS](https://github.com/pspete/psPAS/blob/master/docs/assets/images/shop_banner_symbol.png?raw=true)
 
 ## `Rename-CYBRAccount`
 
