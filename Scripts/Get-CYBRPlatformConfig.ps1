@@ -86,6 +86,14 @@ Exports with required/optional arrays expanded into boolean columns for easier f
             $PolicySettings = Get-PASPlatform -PlatformID $CurrentPlatformID -verbose:$false | Select-Object -ExpandProperty Details
             $ThisPlatform | Add-Member -MemberType NoteProperty -Name Classic -Value $PolicySettings -Force
 
+            # Properties to exclude from Classic CPM (duplicates of v2 API credentialsManagement)
+            $ClassicDuplicates = @(
+                'AllowedSafes', 'AllowManualChange', 'PerformPeriodicChange',
+                'RCAllowManualReconciliation', 'RCAutomaticReconcileWhenUnsynched',
+                'VFAllowManualVerification', 'VFPerformPeriodicVerification',
+                'PolicyID', 'PolicyName', 'PolicyType'
+            )
+
             # Properties to exclude from v2 API general (redundant with PlatformID)
             $GeneralExclusions = @('id')
 
@@ -99,6 +107,9 @@ Exports with required/optional arrays expanded into boolean columns for easier f
                 $ThisPlatform.$Node | Get-Member -MemberType NoteProperty -ea SilentlyContinue | ForEach-Object {
 
                     $OriginalName = $PSItem.Name
+
+                    # Skip Classic CPM duplicates
+                    if ($Node -eq "Classic" -and $OriginalName -in $ClassicDuplicates) { return }
 
                     # Skip redundant general.id
                     if ($Node -eq "General" -and $OriginalName -in $GeneralExclusions) { return }
