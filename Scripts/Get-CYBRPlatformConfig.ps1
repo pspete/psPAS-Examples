@@ -8,6 +8,7 @@ This function shows
 - Using `Get-PASPlatform` to return details of platforms
 - Using `Get-PASPlatform` to return details of specific platforms
 - Combining PowerShell objects to get data into a flat format for easy filtering & querying.
+- Flattening array properties for CSV export compatibility.
 
 .PARAMETER PlatformID
 Optional ID of a platform name to return configuration details of.
@@ -16,6 +17,11 @@ Optional ID of a platform name to return configuration details of.
 Get-CYBRPlatformConfig
 
 Returns details of all active regular platforms
+
+.EXAMPLE
+Get-CYBRPlatformConfig | Export-Csv platforms.csv -NoTypeInformation
+
+Exports platform configuration to CSV with arrays serialized as semicolon-delimited strings.
 
 #>
     [CmdLetBinding()]
@@ -27,7 +33,9 @@ Returns details of all active regular platforms
         [string]$PlatformID
     )
 
-    Begin { }
+    Begin {
+        $AllPlatforms = [System.Collections.Generic.List[PSObject]]::new()
+    }
 
     Process {
 
@@ -52,15 +60,15 @@ Returns details of all active regular platforms
             #current platform details
             $ThisPlatform = $PSItem
             #current platform name
-            $PlatformID = $ThisPlatform.general.id
+            $CurrentPlatformID = $ThisPlatform.general.id
 
             #create output object
             $PlatformSettings = [pscustomobject]@{
-                "PlatformID" = $PlatformID
+                "PlatformID" = $CurrentPlatformID
             }
 
             #get settings from each matching platform
-            $PolicySettings = Get-PASPlatform -PlatformID $PlatformID -verbose:$false | Select-Object -ExpandProperty Details
+            $PolicySettings = Get-PASPlatform -PlatformID $CurrentPlatformID -verbose:$false | Select-Object -ExpandProperty Details
             $ThisPlatform | Add-Member -MemberType NoteProperty -Name Classic -Value $PolicySettings -Force
 
             $ThisPlatform | Get-Member -type NoteProperty | ForEach-Object {
@@ -76,13 +84,30 @@ Returns details of all active regular platforms
 
             }
 
-            #output matching platform details
-            $PlatformSettings
+            $AllPlatforms.Add($PlatformSettings)
 
         }
 
     }
 
-    End { }
+    End {
+        # Flatten arrays to semicolon-delimited strings for CSV compatibility
+        foreach ($platform in $AllPlatforms) {
+            foreach ($prop in $platform.PSObject.Properties) {
+                if ($prop.Value -is [System.Array]) {
+                    $prop.Value = ($prop.Value | ForEach-Object {
+                        if ($_ -is [PSCustomObject] -or $_ -is [hashtable]) {
+                            $_ | ConvertTo-Json -Compress -Depth 10
+                        } else {
+                            $_
+                        }
+                    }) -join ";"
+                } elseif ($prop.Value -is [PSCustomObject]) {
+                    $prop.Value = $prop.Value | ConvertTo-Json -Compress -Depth 10
+                }
+            }
+            $platform
+        }
+    }
 
 }
