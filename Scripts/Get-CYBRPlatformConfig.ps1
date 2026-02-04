@@ -15,7 +15,7 @@ This function shows
 Optional ID of a platform name to return configuration details of.
 
 .PARAMETER ExpandProperties
-Expand required and optional arrays into individual boolean columns
+Expand requiredAccountProperties and optionalAccountProperties arrays into individual boolean columns
 (e.g., required_property_Username, optional_property_LogonDomain).
 
 .EXAMPLE
@@ -86,14 +86,43 @@ Exports with required/optional arrays expanded into boolean columns for easier f
             $PolicySettings = Get-PASPlatform -PlatformID $CurrentPlatformID -verbose:$false | Select-Object -ExpandProperty Details
             $ThisPlatform | Add-Member -MemberType NoteProperty -Name Classic -Value $PolicySettings -Force
 
+            # Properties to exclude from v2 API general (redundant with PlatformID)
+            $GeneralExclusions = @('id')
+
+            # Properties to rename from v2 API general for clarity
+            $GeneralRenames = @{ 'name' = 'platformDisplayName' }
+
             $ThisPlatform | Get-Member -type NoteProperty | ForEach-Object {
 
                 $Node = $PSItem.Name
 
                 $ThisPlatform.$Node | Get-Member -MemberType NoteProperty -ea SilentlyContinue | ForEach-Object {
 
-                    #Add properties relating to platform configuration to output object.
-                    $PlatformSettings | Add-Member -MemberType NoteProperty -Name $PSItem.Name -Value $ThisPlatform.$Node.$($PSItem.Name) -Force
+                    $OriginalName = $PSItem.Name
+
+                    # Skip redundant general.id
+                    if ($Node -eq "General" -and $OriginalName -in $GeneralExclusions) { return }
+
+                    # Determine the output property name
+                    $PropertyName = switch ($Node) {
+                        "linkedAccounts" {
+                            "linkedAccount" + (Get-Culture).TextInfo.ToTitleCase($OriginalName)
+                        }
+                        "properties" {
+                            # Rename required/optional to clarify they are account properties
+                            if ($OriginalName -eq "required") { "requiredAccountProperties" }
+                            elseif ($OriginalName -eq "optional") { "optionalAccountProperties" }
+                            else { $OriginalName }
+                        }
+                        "General" {
+                            # Rename ambiguous general properties
+                            if ($GeneralRenames.ContainsKey($OriginalName)) { $GeneralRenames[$OriginalName] }
+                            else { $OriginalName }
+                        }
+                        default { $OriginalName }
+                    }
+
+                    $PlatformSettings | Add-Member -MemberType NoteProperty -Name $PropertyName -Value $ThisPlatform.$Node.$($OriginalName) -Force
 
                 }
 
@@ -132,13 +161,13 @@ Exports with required/optional arrays expanded into boolean columns for easier f
             $allOptionalProps = [System.Collections.Generic.HashSet[string]]::new()
 
             foreach ($platform in $AllPlatforms) {
-                if ($platform.required -is [System.Array]) {
-                    foreach ($prop in $platform.required) {
+                if ($platform.requiredAccountProperties -is [System.Array]) {
+                    foreach ($prop in $platform.requiredAccountProperties) {
                         if ($prop.name) { [void]$allRequiredProps.Add($prop.name) }
                     }
                 }
-                if ($platform.optional -is [System.Array]) {
-                    foreach ($prop in $platform.optional) {
+                if ($platform.optionalAccountProperties -is [System.Array]) {
+                    foreach ($prop in $platform.optionalAccountProperties) {
                         if ($prop.name) { [void]$allOptionalProps.Add($prop.name) }
                     }
                 }
@@ -151,9 +180,9 @@ Exports with required/optional arrays expanded into boolean columns for easier f
             foreach ($platform in $AllPlatforms) {
                 $props = [ordered]@{}
 
-                # Add all original properties except required/optional arrays
+                # Add all original properties except requiredAccountProperties/optionalAccountProperties arrays
                 foreach ($p in $platform.PSObject.Properties) {
-                    if ($p.Name -in @("required", "optional")) { continue }
+                    if ($p.Name -in @("requiredAccountProperties", "optionalAccountProperties")) { continue }
 
                     $value = $p.Value
                     if ($value -is [System.Array]) {
@@ -175,13 +204,13 @@ Exports with required/optional arrays expanded into boolean columns for easier f
                 $thisRequired = [System.Collections.Generic.HashSet[string]]::new()
                 $thisOptional = [System.Collections.Generic.HashSet[string]]::new()
 
-                if ($platform.required -is [System.Array]) {
-                    foreach ($prop in $platform.required) {
+                if ($platform.requiredAccountProperties -is [System.Array]) {
+                    foreach ($prop in $platform.requiredAccountProperties) {
                         if ($prop.name) { [void]$thisRequired.Add($prop.name) }
                     }
                 }
-                if ($platform.optional -is [System.Array]) {
-                    foreach ($prop in $platform.optional) {
+                if ($platform.optionalAccountProperties -is [System.Array]) {
+                    foreach ($prop in $platform.optionalAccountProperties) {
                         if ($prop.name) { [void]$thisOptional.Add($prop.name) }
                     }
                 }
