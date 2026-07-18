@@ -9,9 +9,14 @@ This function shows
 - Using `Get-PASPlatform` to return details of specific platforms
 - Combining PowerShell objects to get data into a flat format for easy filtering & querying.
 - Flattening array properties for CSV export compatibility.
+- Expanding required/optional properties into boolean columns.
 
 .PARAMETER PlatformID
 Optional ID of a platform name to return configuration details of.
+
+.PARAMETER ExpandProperties
+Expand required and optional arrays into individual boolean columns
+(e.g., required_property_Username, optional_property_LogonDomain).
 
 .EXAMPLE
 Get-CYBRPlatformConfig
@@ -23,6 +28,11 @@ Get-CYBRPlatformConfig | Export-Csv platforms.csv -NoTypeInformation
 
 Exports platform configuration to CSV with arrays serialized as semicolon-delimited strings.
 
+.EXAMPLE
+Get-CYBRPlatformConfig -ExpandProperties | Export-Csv platforms.csv -NoTypeInformation
+
+Exports with required/optional arrays expanded into boolean columns for easier filtering.
+
 #>
     [CmdLetBinding()]
     param(
@@ -30,7 +40,12 @@ Exports platform configuration to CSV with arrays serialized as semicolon-delimi
             Mandatory = $false,
             ValueFromPipeline = $false
         )]
-        [string]$PlatformID
+        [string]$PlatformID,
+
+        [parameter(
+            Mandatory = $false
+        )]
+        [switch]$ExpandProperties
     )
 
     Begin {
@@ -91,22 +106,98 @@ Exports platform configuration to CSV with arrays serialized as semicolon-delimi
     }
 
     End {
-        # Flatten arrays to semicolon-delimited strings for CSV compatibility
-        foreach ($platform in $AllPlatforms) {
-            foreach ($prop in $platform.PSObject.Properties) {
-                if ($prop.Value -is [System.Array]) {
-                    $prop.Value = ($prop.Value | ForEach-Object {
-                        if ($_ -is [PSCustomObject] -or $_ -is [hashtable]) {
-                            $_ | ConvertTo-Json -Compress -Depth 10
-                        } else {
-                            $_
-                        }
-                    }) -join ";"
-                } elseif ($prop.Value -is [PSCustomObject]) {
-                    $prop.Value = $prop.Value | ConvertTo-Json -Compress -Depth 10
+        if (-not $ExpandProperties) {
+            # Flatten arrays to semicolon-delimited strings for CSV compatibility
+            foreach ($platform in $AllPlatforms) {
+                foreach ($prop in $platform.PSObject.Properties) {
+                    if ($prop.Value -is [System.Array]) {
+                        $prop.Value = ($prop.Value | ForEach-Object {
+                            if ($_ -is [PSCustomObject] -or $_ -is [hashtable]) {
+                                $_ | ConvertTo-Json -Compress -Depth 10
+                            } else {
+                                $_
+                            }
+                        }) -join ";"
+                    } elseif ($prop.Value -is [PSCustomObject]) {
+                        $prop.Value = $prop.Value | ConvertTo-Json -Compress -Depth 10
+                    }
+                }
+                $platform
+            }
+        } else {
+            # Expand required/optional into boolean columns
+
+            # First pass: discover all unique property names
+            $allRequiredProps = [System.Collections.Generic.HashSet[string]]::new()
+            $allOptionalProps = [System.Collections.Generic.HashSet[string]]::new()
+
+            foreach ($platform in $AllPlatforms) {
+                if ($platform.required -is [System.Array]) {
+                    foreach ($prop in $platform.required) {
+                        if ($prop.name) { [void]$allRequiredProps.Add($prop.name) }
+                    }
+                }
+                if ($platform.optional -is [System.Array]) {
+                    foreach ($prop in $platform.optional) {
+                        if ($prop.name) { [void]$allOptionalProps.Add($prop.name) }
+                    }
                 }
             }
-            $platform
+
+            $requiredPropsSorted = $allRequiredProps | Sort-Object
+            $optionalPropsSorted = $allOptionalProps | Sort-Object
+
+            # Second pass: create flattened objects with expanded columns
+            foreach ($platform in $AllPlatforms) {
+                $props = [ordered]@{}
+
+                # Add all original properties except required/optional arrays
+                foreach ($p in $platform.PSObject.Properties) {
+                    if ($p.Name -in @("required", "optional")) { continue }
+
+                    $value = $p.Value
+                    if ($value -is [System.Array]) {
+                        $props[$p.Name] = ($value | ForEach-Object {
+                            if ($_ -is [PSCustomObject] -or $_ -is [hashtable]) {
+                                $_ | ConvertTo-Json -Compress -Depth 10
+                            } else {
+                                $_
+                            }
+                        }) -join ";"
+                    } elseif ($value -is [PSCustomObject]) {
+                        $props[$p.Name] = $value | ConvertTo-Json -Compress -Depth 10
+                    } else {
+                        $props[$p.Name] = $value
+                    }
+                }
+
+                # Build sets of required/optional property names for this platform
+                $thisRequired = [System.Collections.Generic.HashSet[string]]::new()
+                $thisOptional = [System.Collections.Generic.HashSet[string]]::new()
+
+                if ($platform.required -is [System.Array]) {
+                    foreach ($prop in $platform.required) {
+                        if ($prop.name) { [void]$thisRequired.Add($prop.name) }
+                    }
+                }
+                if ($platform.optional -is [System.Array]) {
+                    foreach ($prop in $platform.optional) {
+                        if ($prop.name) { [void]$thisOptional.Add($prop.name) }
+                    }
+                }
+
+                # Add boolean columns for each required property
+                foreach ($propName in $requiredPropsSorted) {
+                    $props["required_property_$propName"] = $thisRequired.Contains($propName)
+                }
+
+                # Add boolean columns for each optional property
+                foreach ($propName in $optionalPropsSorted) {
+                    $props["optional_property_$propName"] = $thisOptional.Contains($propName)
+                }
+
+                [PSCustomObject]$props
+            }
         }
     }
 
